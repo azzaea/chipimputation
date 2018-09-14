@@ -268,6 +268,7 @@ process check_mismach {
         nblines=\$(zcat ${target_vcfFile} | wc -l)
         if (( \$nblines > 1 ))
         then
+            bcftools index --tbi ${target_vcfFile}
             bcftools norm --check-ref w \
                 -f ${params.reference_genome} \
                 ${target_vcfFile} \
@@ -385,6 +386,7 @@ process split_target_to_chunk {
         """
 }
 
+// TODO Use combine instead
 split_vcf_to_chrm.into{ split_vcf_to_chrm; split_vcf_to_chrm_1 }
 def transform_qc_chunk = { chrm, chunk_start, chunk_end, target_name, target_vcfFile ->
     chunks_datas = []
@@ -412,6 +414,7 @@ process phase_target_chunk {
         set chrm, chunk_start, chunk_end, target_name, file("${file_out}.vcf.gz"), ref_name, file(ref_vcf), file(ref_m3vcf) into phase_target
     script:
         file_out = "${file(target_vcfFile_chunk.baseName).baseName}_${ref_name}-phased"
+        // TODO Check that the chunk must have at least 5 SNPs in common with the REF
         """
         nblines=\$(zcat ${target_vcfFile_chunk} | grep -v '^#' | wc -l)
         if (( \$nblines > 0 ))
@@ -455,8 +458,9 @@ process impute_target {
         minimac4 \
             --refHaps ${ref_m3vcf} \
             --haps ${target_phased_vcfFile} \
-            --format GT \
+            --format GT,DS \
             --allTypedSites \
+            --minRatio 0.0005 \
             --chr ${chrm} --start ${chunk_start} --end ${chunk_end} --window ${params.buffer_size} \
             --prefix ${base}_imputed
         """
